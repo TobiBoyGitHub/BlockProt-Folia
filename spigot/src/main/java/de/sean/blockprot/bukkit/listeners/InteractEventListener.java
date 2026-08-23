@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 - 2025 spnda
+ * Copyright (C) 2021-2025 spnda
  * This file is part of BlockProt <https://github.com/spnda/BlockProt>.
  *
  * BlockProt is free software: you can redistribute it and/or modify
@@ -15,7 +15,6 @@
  * You should have received a copy of the GNU General Public License
  * along with BlockProt.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package de.sean.blockprot.bukkit.listeners;
 
 import de.sean.blockprot.bukkit.*;
@@ -104,7 +103,10 @@ public class InteractEventListener implements Listener {
                 return;
             }
 
-            Inventory inv = BlockProtAPI.getInstance().getLockInventoryForBlock(event.getClickedBlock(), player);
+            // Safe to use the Sync variant here: PlayerInteractEvent always fires
+            // on the region thread that owns both the player and the block within
+            // interaction range, so there is no cross-region hop needed.
+            Inventory inv = BlockProtAPI.getInstance().getLockInventoryForBlockSync(event.getClickedBlock(), player);
             if (inv == null) {
                 sendMessage(player, Translator.get(TranslationKey.MESSAGES__NO_PERMISSION));
             } else {

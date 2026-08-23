@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 - 2025 spnda
+ * Copyright (C) 2021-2025 spnda
  * This file is part of BlockProt <https://github.com/spnda/BlockProt>.
  *
  * BlockProt is free software: you can redistribute it and/or modify
@@ -15,7 +15,6 @@
  * You should have received a copy of the GNU General Public License
  * along with BlockProt.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package de.sean.blockprot.bukkit.inventories;
 
 import de.sean.blockprot.bukkit.BlockProt;
@@ -34,7 +33,7 @@ import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.SkullMeta;
-import org.bukkit.scheduler.BukkitTask;
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import org.enginehub.squirrelid.Profile;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -48,8 +47,8 @@ public class FriendSearchResultInventory extends BlockProtInventory {
 
     private final int maxResults = getSize() - 1;
 
-    BukkitTask loadTask = null;
-    BukkitTask updateTask = null;
+    ScheduledTask loadTask = null;
+    ScheduledTask updateTask = null;
 
     @Override
     int getSize() {
@@ -160,8 +159,34 @@ public class FriendSearchResultInventory extends BlockProtInventory {
         InventoryState state = InventoryState.get(player.getUniqueId());
         if (state == null) return inventory;
 
-        updateTask = Bukkit.getScheduler().runTaskTimer(BlockProt.getInstance(), new ResultUpdateTask(state), 0, 1);
-        loadTask = Bukkit.getScheduler().runTaskAsynchronously(BlockProt.getInstance(), new AsyncResultLoadTask(state, player, searchQuery));
+        // updateTask repeatedly touches this Inventory, which belongs to the player
+        // viewing the GUI, so it must run on that player's entity scheduler — not
+        // Bukkit.getScheduler(), which throws UnsupportedOperationException on Folia
+        // for every method. The "retired" callback (2nd-to-last arg) runs if the
+        // player is removed/disconnects before/during scheduling; we have nothing
+        // extra to clean up there since the task itself just stops running.
+        //
+        // IMPORTANT: create ONE ResultUpdateTask instance and reuse it across every
+        // tick. The old Bukkit.getScheduler().runTaskTimer(..., new ResultUpdateTask(state), ...)
+        // call passed a single Runnable instance that the scheduler invoked repeatedly,
+        // so its playersIndex field persisted between ticks. A lambda that does
+        // `task -> new ResultUpdateTask(state).run()` creates a BRAND NEW instance
+        // every tick instead — playersIndex resets to 0 each time, so the task can
+        // never tell it already placed a result, and ends up wiping the inventory
+        // right after another (also-fresh) instance just populated it.
+        final ResultUpdateTask resultUpdateTask = new ResultUpdateTask(state);
+        updateTask = player.getScheduler().runAtFixedRate(
+            BlockProt.getInstance(),
+            task -> resultUpdateTask.run(),
+            null,
+            1,
+            1
+        );
+        // loadTask does an async profile lookup with no region/entity affinity.
+        loadTask = Bukkit.getAsyncScheduler().runNow(
+            BlockProt.getInstance(),
+            task -> new AsyncResultLoadTask(state, player, searchQuery).run()
+        );
 
         for (int i = 0; i < maxResults; i++) {
             this.setItemStack(i, Material.SKELETON_SKULL, "Loading...");
@@ -181,8 +206,21 @@ public class FriendSearchResultInventory extends BlockProtInventory {
 
         @Override
         public void run() {
-            final var scheduler = Bukkit.getScheduler();
-            if (!scheduler.isQueued(loadTask.getTaskId()) && !scheduler.isCurrentlyRunning(loadTask.getTaskId()) && resultQueue.isEmpty()) {
+            // Bukkit.getScheduler().isQueued()/isCurrentlyRunning() don't exist on
+            // Folia's ScheduledTask — getExecutionState() is the replacement.
+            //
+            // IMPORTANT: check for "definitely done" (FINISHED/CANCELLED), not for
+            // "currently running" (RUNNING/CANCELLED_RUNNING). ScheduledTask also has
+            // a state for "scheduled but not yet started executing" that isn't RUNNING
+            // — a whitelist check treats that as "not pending" on this task's very
+            // first tick (before loadTask has even started), which wiped the
+            // inventory before any results could arrive. A blacklist check is
+            // correct regardless of what that in-between state is actually called.
+            final var loadTaskState = loadTask.getExecutionState();
+            final boolean loadTaskDefinitelyDone =
+                loadTaskState == ScheduledTask.ExecutionState.FINISHED
+                    || loadTaskState == ScheduledTask.ExecutionState.CANCELLED;
+            if (loadTaskDefinitelyDone && resultQueue.isEmpty()) {
                 if (playersIndex == 0) {
                     // If the task has stopped running and there are no results, clear the inventory
                     for (int i = 0; i < maxResults; i++) {
@@ -233,7 +271,6 @@ public class FriendSearchResultInventory extends BlockProtInventory {
         public void run() {
             double minimumSimilarity = BlockProt.getDefaultConfig().getFriendSearchSimilarityPercentage();
             final var offlinePlayers = Bukkit.getOfflinePlayers();
-
             final var stream = Arrays.stream(offlinePlayers)
                 .map(OfflinePlayer::getUniqueId)
                 // Other plugins/mods might use other UUID versions for NPCs or other players.

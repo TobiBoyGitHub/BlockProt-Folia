@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 - 2025 spnda
+ * Copyright (C) 2021-2025 spnda
  * This file is part of BlockProt <https://github.com/spnda/BlockProt>.
  *
  * BlockProt is free software: you can redistribute it and/or modify
@@ -15,7 +15,6 @@
  * You should have received a copy of the GNU General Public License
  * along with BlockProt.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package de.sean.blockprot.bukkit.commands;
 
 import de.sean.blockprot.bukkit.BlockProt;
@@ -33,12 +32,12 @@ public class UpdateCommand implements CommandExecutor {
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
         if (canUseCommand(sender)) {
-            Bukkit.getScheduler().runTaskAsynchronously(
+            Bukkit.getAsyncScheduler().runNow(
                 BlockProt.getInstance(),
-                new UpdateChecker(
+                task -> new UpdateChecker(
                     BlockProt.getInstance().getDescription(),
                     new ArrayList<>(Bukkit.getOnlinePlayers())
-                )
+                ).run()
             );
             return true;
         }

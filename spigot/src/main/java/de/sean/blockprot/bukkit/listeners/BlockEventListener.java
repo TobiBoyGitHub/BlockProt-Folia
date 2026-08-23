@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 - 2025 spnda
+ * Copyright (C) 2021-2025 spnda
  * This file is part of BlockProt <https://github.com/spnda/BlockProt>.
  *
  * BlockProt is free software: you can redistribute it and/or modify
@@ -15,7 +15,6 @@
  * You should have received a copy of the GNU General Public License
  * along with BlockProt.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package de.sean.blockprot.bukkit.listeners;
 
 import com.google.common.collect.Iterables;
@@ -185,9 +184,14 @@ public class BlockEventListener implements Listener {
                 }
             }
 
-            Bukkit.getScheduler().runTaskLater(
+            // This task manipulates the block itself (and potentially its double-chest
+            // pair), so it must run on the region thread that owns block's location —
+            // Bukkit.getScheduler() throws UnsupportedOperationException on Folia for
+            // every method, sync or async, so we use RegionScheduler instead.
+            Bukkit.getRegionScheduler().runDelayed(
                 this.blockProt,
-                () -> {
+                block.getLocation(),
+                scheduledTask -> {
                     if (block.getType() == Material.CHEST || block.getType() == Material.TRAPPED_CHEST) {
                         // We cannot use BlockNBTHandler#applyToOtherContainer, because we want the
                         // data to be copied to this new chest, instead of the old chest being effectively

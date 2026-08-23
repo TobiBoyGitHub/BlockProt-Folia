@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 - 2025 spnda
+ * Copyright (C) 2021-2025 spnda
  * This file is part of BlockProt <https://github.com/spnda/BlockProt>.
  *
  * BlockProt is free software: you can redistribute it and/or modify
@@ -15,7 +15,6 @@
  * You should have received a copy of the GNU General Public License
  * along with BlockProt.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package de.sean.blockprot.bukkit;
 
 import de.sean.blockprot.bukkit.commands.BlockProtCommand;
@@ -26,7 +25,6 @@ import de.sean.blockprot.bukkit.metrics.IntegrationBarChart;
 import de.sean.blockprot.bukkit.nbt.StatHandler;
 import de.sean.blockprot.bukkit.tasks.UpdateChecker;
 import de.tr7zw.changeme.nbtapi.utils.MinecraftVersion;
-import net.wesjd.anvilgui.version.VersionMatcher;
 import org.bstats.bukkit.Metrics;
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -159,18 +157,13 @@ public final class BlockProt extends JavaPlugin {
         }
 
         /* Check for updates */
-        Bukkit.getScheduler().runTaskAsynchronously(this, new UpdateChecker(this.getDescription()));
-
-        // We'll try and get the AnvilGUI API to select the version wrapper. Should it fail, we display an error that
-        // we do not support the current Minecraft version.
-        try {
-            new VersionMatcher().match();
-        } catch (IllegalStateException e) {
-            final var message = "This plugin does not support the current Minecraft version! Please check if there is a new update available.";
-            getLogger().severe(message);
-            getServer().getPluginManager().registerEvents(new ErrorEventListener(message), this);
-            return;
-        }
+        // Bukkit.getScheduler() is entirely unusable on Folia — every method on it
+        // (including the async variants) throws UnsupportedOperationException, since
+        // Folia requires going through its own per-context schedulers instead. For
+        // work with no region/entity affinity (like this HTTP update check), that's
+        // Bukkit.getAsyncScheduler(). The task itself doesn't need the ScheduledTask
+        // handle, so we just discard it via the lambda parameter.
+        Bukkit.getAsyncScheduler().runNow(this, task -> new UpdateChecker(this.getDescription()).run());
 
         MinecraftVersion.disableUpdateCheck();
 

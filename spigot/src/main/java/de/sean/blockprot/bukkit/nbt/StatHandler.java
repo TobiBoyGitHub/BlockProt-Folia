@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 - 2025 spnda
+ * Copyright (C) 2021-2025 spnda
  * This file is part of BlockProt <https://github.com/spnda/BlockProt>.
  *
  * BlockProt is free software: you can redistribute it and/or modify
@@ -15,7 +15,6 @@
  * You should have received a copy of the GNU General Public License
  * along with BlockProt.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package de.sean.blockprot.bukkit.nbt;
 
 import de.sean.blockprot.bukkit.BlockProt;
@@ -34,7 +33,7 @@ import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
-import org.bukkit.scheduler.BukkitTask;
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -58,7 +57,7 @@ public final class StatHandler extends NBTHandler<NBTCompound> {
     static final String PLAYER_SUB_KEY = "player_stats";
     static final String SERVER_SUB_KEY = "server_stats";
 
-    private static @Nullable BukkitTask fileSaveTask;
+    private static @Nullable ScheduledTask fileSaveTask;
 
     private static @Nullable File backupFile;
 
@@ -118,11 +117,18 @@ public final class StatHandler extends NBTHandler<NBTCompound> {
                 }
             }
 
-            fileSaveTask = Bukkit.getScheduler().runTaskTimerAsynchronously(
+            // Bukkit.getScheduler() throws UnsupportedOperationException on Folia for
+            // every method. This task just serializes a file to disk with no
+            // region/entity affinity, so AsyncScheduler is the right replacement.
+            // Note the timing switches from ticks to TimeUnit — Folia's async
+            // scheduler is time-based, not tick-based, since there's no single
+            // global tick loop it can hook into.
+            fileSaveTask = Bukkit.getAsyncScheduler().runAtFixedRate(
                 BlockProt.getInstance(),
-                new StatisticFileSaveTask(),
+                task -> new StatisticFileSaveTask().run(),
                 0L,
-                5 * 60 * 20 // 5 minutes * 60 seconds * 20 ticks
+                5,
+                java.util.concurrent.TimeUnit.MINUTES
             );
         } catch (Throwable e) {
             BlockProt.getInstance().getLogger().warning("Failed to open BlockProt statistic file.");

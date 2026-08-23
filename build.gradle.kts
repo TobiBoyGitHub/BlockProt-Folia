@@ -7,14 +7,14 @@ buildscript {
     }
 
     dependencies {
-        classpath("org.kohsuke:github-api:1.318")
+        classpath("org.kohsuke:github-api:1.326")
     }
 }
 
 plugins {
     id("org.gradle.java-library")
-    id("org.ajoberstar.grgit") version "5.2.1"
-    id("org.cadixdev.licenser") version "0.6.1"
+    id("org.ajoberstar.grgit") version "5.3.3"
+    id("com.diffplug.spotless") version "8.10.0"
 }
 
 fun gitBranchName(): String {
@@ -29,11 +29,11 @@ fun gitBranchName(): String {
 }
 
 val env: MutableMap<String, String> = System.getenv()
-val blockProtVersion: String by project
+val blockProtVersion: String = project.property("blockProtVersion") as String
 
 allprojects {
     apply(plugin = "org.gradle.java-library")
-    apply(plugin = "org.cadixdev.licenser")
+    apply(plugin = "com.diffplug.spotless")
 
     group = "de.sean.blockprot"
     version = blockProtVersion
@@ -47,9 +47,9 @@ allprojects {
     }
 
     tasks.compileJava {
-        options.release.set(17)
-        java.sourceCompatibility = JavaVersion.VERSION_17
-        java.targetCompatibility = JavaVersion.VERSION_17
+        options.release.set(25)
+        java.sourceCompatibility = JavaVersion.VERSION_25
+        java.targetCompatibility = JavaVersion.VERSION_25
     }
 
     ext["gitBranchName"] = gitBranchName()
@@ -63,14 +63,17 @@ allprojects {
         )
     }
 
+    // We use Spotless (with the licenseHeader step) instead of the old
+    // org.cadixdev.licenser plugin, which was last released in 2021 and is
+    // incompatible with Gradle 9+. We also previously considered spotless'
+    // Java formatter itself, but it had too many issues — so we only use
+    // Spotless here for the license header check/apply, not formatting.
     afterEvaluate {
-        // We use license instead of spotless now, as spotless'
-        // java formatter had too many issues.
-        license {
-            header(rootProject.file("HEADER.txt"))
-            include("**/*.java")
-            properties {
-                this["year"] = "2021 - 2025"
+        configure<com.diffplug.gradle.spotless.SpotlessExtension> {
+            java {
+                target("src/**/*.java")
+                licenseHeaderFile(rootProject.file("HEADER.txt"))
+                    .updateYearWithLatest(false)
             }
         }
     }
@@ -93,7 +96,7 @@ tasks.register("github") {
         // Get the output JARs for each subproject.
         val files = mutableListOf<File?>()
         subprojects.filter { it.name != "common" }.forEach {
-            val dir = "${it.buildDir}/libs/"
+            val dir = it.layout.buildDirectory.dir("libs").get().asFile.path + "/"
             files.add(file(dir).listFiles()?.last { file ->
                 file.nameWithoutExtension.endsWith("all")
             })

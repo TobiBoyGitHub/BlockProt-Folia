@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 - 2025 spnda
+ * Copyright (C) 2021-2025 spnda
  * This file is part of BlockProt <https://github.com/spnda/BlockProt>.
  *
  * BlockProt is free software: you can redistribute it and/or modify
@@ -15,7 +15,6 @@
  * You should have received a copy of the GNU General Public License
  * along with BlockProt.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package de.sean.blockprot.bukkit.inventories;
 
 import de.sean.blockprot.bukkit.BlockProt;
@@ -25,7 +24,6 @@ import de.sean.blockprot.bukkit.Translator;
 import de.sean.blockprot.bukkit.events.BlockAccessMenuEvent;
 import de.sean.blockprot.bukkit.nbt.BlockNBTHandler;
 import de.sean.blockprot.bukkit.nbt.PlayerInventoryClipboard;
-import net.wesjd.anvilgui.AnvilGUI;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
@@ -35,9 +33,6 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
-
-import java.util.Collections;
-import java.util.List;
 
 public class BlockLockInventory extends BlockProtInventory {
     @Override
@@ -108,24 +103,18 @@ public class BlockLockInventory extends BlockProtInventory {
                 }
                 case NAME_TAG -> {
                     player.closeInventory();
-                    new AnvilGUI.Builder()
-                        .text("Block name")
-                        .title(Translator.get(TranslationKey.INVENTORIES__SET_BLOCK_NAME))
-                        .plugin(BlockProt.getInstance())
-                        .onClick((Integer slot, AnvilGUI.StateSnapshot snapshot) -> {
-                            if (slot != AnvilGUI.Slot.OUTPUT) {
-                                return Collections.emptyList();
-                            }
-
-                            var invState = InventoryState.get(snapshot.getPlayer().getUniqueId());
+                    AnvilTextInput.open(
+                        player,
+                        Translator.get(TranslationKey.INVENTORIES__SET_BLOCK_NAME),
+                        "Block name",
+                        enteredText -> {
+                            var invState = InventoryState.get(player.getUniqueId());
                             assert(invState.getBlock() != null);
 
-                            new BlockNBTHandler(invState.getBlock()).setName(snapshot.getText());
-                            Inventory inventory = new BlockLockInventory().fill(player, block.getType(), new BlockNBTHandler(block));
-                            if (inventory == null) return List.of(AnvilGUI.ResponseAction.close());
-                            return List.of(AnvilGUI.ResponseAction.openInventory(inventory));
-                        })
-                        .open(player);
+                            new BlockNBTHandler(invState.getBlock()).setName(enteredText);
+                            return new BlockLockInventory().fill(player, block.getType(), new BlockNBTHandler(block));
+                        }
+                    );
                 }
                 case SPYGLASS -> closeAndOpen(player, new BlockInspectContentsInventory(player).fill());
                 default -> closeAndOpen(

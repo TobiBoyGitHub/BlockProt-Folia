@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 - 2025 spnda
+ * Copyright (C) 2021-2025 spnda
  * This file is part of BlockProt <https://github.com/spnda/BlockProt>.
  *
  * BlockProt is free software: you can redistribute it and/or modify
@@ -15,7 +15,6 @@
  * You should have received a copy of the GNU General Public License
  * along with BlockProt.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package de.sean.blockprot.bukkit.listeners;
 
 import de.sean.blockprot.bukkit.BlockProt;
@@ -34,12 +33,12 @@ public class JoinEventListener implements Listener {
     public void onJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         if (BlockProt.getDefaultConfig().shouldNotifyOpOfUpdates() && player.isOp()) {
-            Bukkit.getScheduler().runTaskAsynchronously(
+            Bukkit.getAsyncScheduler().runNow(
                 BlockProt.getInstance(),
-                new UpdateChecker(
+                task -> new UpdateChecker(
                     BlockProt.getInstance().getDescription(),
                     Collections.singletonList(player)
-                )
+                ).run()
             );
         }
         if (BlockProt.getDefaultConfig().publicIsFriendByDefault() && !player.hasPlayedBefore()) {

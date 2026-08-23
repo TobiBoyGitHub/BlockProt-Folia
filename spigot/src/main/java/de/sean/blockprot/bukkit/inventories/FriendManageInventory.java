@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 - 2025 spnda
+ * Copyright (C) 2021-2025 spnda
  * This file is part of BlockProt <https://github.com/spnda/BlockProt>.
  *
  * BlockProt is free software: you can redistribute it and/or modify
@@ -15,7 +15,6 @@
  * You should have received a copy of the GNU General Public License
  * along with BlockProt.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package de.sean.blockprot.bukkit.inventories;
 
 import com.google.common.collect.Iterables;
@@ -206,23 +205,28 @@ public final class FriendManageInventory extends BlockProtInventory {
             TranslationKey.INVENTORIES__FRIENDS__SEARCH);
         setBackButton();
 
-        Bukkit.getScheduler().runTaskAsynchronously(
+        Bukkit.getAsyncScheduler().runNow(
             BlockProt.getInstance(),
-            () -> {
+            task -> {
                 try {
                     final var profiles = BlockProt.getProfileService().findAllByUuid(state.friendResultCache);
 
-                    int i = 0;
-                    while (i < Math.min(maxSkulls, profiles.size())) {
-                        final var profile = profiles.get(i);
-                        // The profiles array doesn't necessarily have the same order as the friendResultCache.
-                        final var index = Iterables.indexOf(state.friendResultCache, f -> f.equals(profile.getUniqueId()));
+                    // setPlayerSkull() writes directly into this Inventory, which
+                    // belongs to player — that write must happen on player's entity
+                    // scheduler, not on this async thread.
+                    player.getScheduler().run(BlockProt.getInstance(), entityTask -> {
+                        int i = 0;
+                        while (i < Math.min(maxSkulls, profiles.size())) {
+                            final var profile = profiles.get(i);
+                            // The profiles array doesn't necessarily have the same order as the friendResultCache.
+                            final var index = Iterables.indexOf(state.friendResultCache, f -> f.equals(profile.getUniqueId()));
 
-                        if (!profile.getUniqueId().equals(FriendSupportingHandler.publicUuid)) {
-                            setPlayerSkull(index, Bukkit.getServer().createPlayerProfile(profile.getUniqueId(), profile.getName()));
+                            if (!profile.getUniqueId().equals(FriendSupportingHandler.publicUuid)) {
+                                setPlayerSkull(index, Bukkit.getServer().createPlayerProfile(profile.getUniqueId(), profile.getName()));
+                            }
+                            i++;
                         }
-                        i++;
-                    }
+                    }, null);
                 } catch (Exception e) {
                     BlockProt.getInstance().getLogger().warning("Failed to update PlayerProfile: " + e.getMessage());
                 }
