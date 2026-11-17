@@ -38,6 +38,7 @@ import org.enginehub.squirrelid.cache.SQLiteCache;
 import org.enginehub.squirrelid.resolver.ProfileService;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import de.sean.blockprot.bukkit.inventories.AnvilTextInput;
 
 import java.io.*;
 import java.util.ArrayList;
@@ -187,6 +188,7 @@ public final class BlockProt extends JavaPlugin {
         registerEvent(pm, new JoinEventListener());
         registerEvent(pm, new PistonEventListener());
         registerEvent(pm, new RedstoneEventListener());
+        registerEvent(pm, new AnvilTextInput());
 
         Objects.requireNonNull(this.getCommand("blockprot"))
             .setExecutor(new BlockProtCommand());

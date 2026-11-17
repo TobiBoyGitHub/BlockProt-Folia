@@ -45,7 +45,7 @@ dependencies {
     // 26.1.2.build.8-stable is the latest stable Folia build as of writing — verify against
     // https://papermc.io/downloads/folia before every release, since old build numbers get
     // superseded and this is a manually pinned version, not a floating range.
-    compileOnly("dev.folia:folia-api:26.1.2.build.8-stable")
+    compileOnly("dev.folia:folia-api:26.3.build.5-alpha")
     compileOnly("org.apache.commons:commons-lang3:3.13.0")
 
     // bStats

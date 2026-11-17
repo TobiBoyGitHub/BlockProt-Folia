@@ -104,37 +104,43 @@ public class BlockEventListener implements Listener {
         if (handler.isOwner(event.getPlayer().getUniqueId().toString()) && (!event.isCancelled() && event.isDropItems() && event.getPlayer().getGameMode() != GameMode.CREATIVE)) {
             // The player can break the block. We will now check if it's a shulker box,
             // so we can add NBT to the shulker box that it gets locked upon placing again.
-            event.setDropItems(false); // Prevent the event from dropping items itself
             Collection<ItemStack> itemsToDrop = event.getBlock().getDrops();
             if (itemsToDrop.isEmpty()) return;
 
             var item = Iterables.getFirst(itemsToDrop, null); // Shulker blocks should only have a single drop anyway
             if (item == null) return;
 
-            if (MinecraftVersion.isAtLeastVersion(MinecraftVersion.MC1_20_R4)) {
-                final var meta = item.getItemMeta();
-                final var pdc = meta.getPersistentDataContainer();
-                pdc.set(new NamespacedKey(BlockProt.getInstance(), "shulker_data"), PersistentDataType.STRING, "Hi!");
-                item.setItemMeta(meta);
-
-                // Since Minecraft 1.20.6 item stacks use components instead of NBT.
-                // The block_entity_data tag works like the BlockEntityTag used to, but requires an "id" field for the type of block.
-                final var nbt = NBT.itemStackToNBT(item);
-                final var entityData = nbt.getOrCreateCompound("components").getOrCreateCompound("minecraft:block_entity_data");
+            try {
                 if (MinecraftVersion.isAtLeastVersion(MinecraftVersion.MC1_20_R4)) {
-                    // See https://github.com/spnda/BlockProt/issues/339#issuecomment-3690954598
-                    entityData.setString("id", "minecraft:shulker_box");
+                    final var meta = item.getItemMeta();
+                    final var pdc = meta.getPersistentDataContainer();
+                    pdc.set(new NamespacedKey(BlockProt.getInstance(), "shulker_data"), PersistentDataType.STRING, "Hi!");
+                    item.setItemMeta(meta);
+
+                    // Since Minecraft 1.20.6 item stacks use components instead of NBT.
+                    // The block_entity_data tag works like the BlockEntityTag used to, but requires an "id" field for the type of block.
+                    final var nbt = NBT.itemStackToNBT(item);
+                    final var entityData = nbt.getOrCreateCompound("components").getOrCreateCompound("minecraft:block_entity_data");
+                    if (MinecraftVersion.isAtLeastVersion(MinecraftVersion.MC1_20_R4)) {
+                        // See https://github.com/spnda/BlockProt/issues/339#issuecomment-3690954598
+                        entityData.setString("id", "minecraft:shulker_box");
+                    } else {
+                        entityData.setString("id", item.getType().getKey().toString());
+                    }
+                    entityData.getOrCreateCompound("PublicBukkitValues").mergeCompound(handler.getNbtCopy());
+                    item = Objects.requireNonNull(NBT.itemStackFromNBT(nbt));
                 } else {
-                    entityData.setString("id", item.getType().getKey().toString());
+                    NBT.modify(item, readWriteItemNBT -> {
+                        readWriteItemNBT.getOrCreateCompound("BlockEntityTag").getOrCreateCompound("PublicBukkitValues").mergeCompound(handler.getNbtCopy());
+                    });
                 }
-                entityData.getOrCreateCompound("PublicBukkitValues").mergeCompound(handler.getNbtCopy());
-                item = Objects.requireNonNull(NBT.itemStackFromNBT(nbt));
-            } else {
-                NBT.modify(item, readWriteItemNBT -> {
-                    readWriteItemNBT.getOrCreateCompound("BlockEntityTag").getOrCreateCompound("PublicBukkitValues").mergeCompound(handler.getNbtCopy());
-                });
+            } catch (RuntimeException e) {
+                // Leave the event untouched so vanilla drops the box; losing the lock beats losing the item.
+                BlockProt.getInstance().getLogger().log(java.util.logging.Level.SEVERE, "Could not build locked shulker box drop", e);
+                return;
             }
 
+            event.setDropItems(false); // Prevent the event from dropping items itself
             event.getPlayer().getWorld().dropItemNaturally(event.getBlock().getLocation(), item);
 
             event.getBlock().setType(Material.AIR);
